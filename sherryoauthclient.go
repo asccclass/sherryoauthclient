@@ -1,13 +1,15 @@
-package main
+package SherryOauthClient
 
 import(
    "os"
    "fmt"
+   "time"
    "bytes"
    "net/http"
    "encoding/json"
 )
 
+// 回傳訊息內容
 type ReplayPackage struct {
    Token	string	`json:"token"`
    Message	string	`json:"message"`
@@ -20,50 +22,65 @@ type Payload struct {
 }
 
 type Oauth struct {
-   OauthServer string	// OAuth Server IP Address
+   OauthServer	string	// OAuth Server IP Address
+   ProxyUrl	string
 }
 
 // 取得Token
 func (o *Oauth) Login(username, password string)(string, error) {
-   return "", nil
+   if username == "" || password == "" {
+      return "", fmt.Errorf("Account or password is empty.")
+   }
+   data := Payload{username, password}
+   payloadBytes, err := json.Marshal(data)
+   if err != nil { return "", err }
+   var netClient = &http.Client{
+      Timeout: time.Second * 10,
+   }
+   req, err := http.NewRequest("POST", o.OauthServer, bytes.NewReader(payloadBytes))
+   if err != nil { return "", err }
+   req.Header.Set("Content-Type", "application/json")
+   resp, err := netClient.Do(req)
+   if err != nil {
+      return "", fmt.Errorf("http.Do error(%v)", err)
+   }
+   defer resp.Body.Close()
+   x := ReplayPackage{}
+   if err = json.NewDecoder(resp.Body).Decode(&x); err != nil {
+      return "", err
+   }
+   y, _ := json.Marshal(x)
+   return string(y), nil
 }
 
-func NewOauthClient(OauthServerUrl string)(*Oauth) {
+func(o *Oauth)SetProxy(url string) {
+   if url != "" {
+      o.ProxyUrl = url
+      os.Setenv("HTTP_PROXY", o.ProxyUrl)
+   }
+}
+
+func NewOauthClient(OauthServerUrl string)(*Oauth, error) {
+   if OauthServerUrl == "" {
+      return nil, fmt.Errorf("Must have Oauth Server's Url.")
+   }
+
    return &Oauth{
       OauthServer: OauthServerUrl,
-   }
+   }, nil
 }
 
 
 func main() {
-   // or := NewOauthClient("https://wteamapi.its.sinica.edu.tw/coursehours/dorelogin")
-
-   os.Setenv("HTTP_PROXY", "http://140.109.12.18:3128")
-
-   data := Payload{"xeplusplatform", "12345"}
-   payloadBytes, err := json.Marshal(data)
-   if err != nil {
-	panic("error payload")
-   }
-   body := bytes.NewReader(payloadBytes)
-
-   req, err := http.NewRequest("POST", "http://localhost/coursehours/dorelogin", body)
+   oauth, err := NewOauthClient("https://wteamapi.its.sinica.edu.tw/coursehours/dorelogin")
    if err != nil {
       panic(err)
    }
-   req.Header.Set("Content-Type", "application/json")
 
-   resp, err := http.DefaultClient.Do(req)
+   token, err := oauth.Login("eplusplatform", "12345")
    if err != nil {
-      panic(err)
+      fmt.Println(err)
+      return
    }
-   defer resp.Body.Close()
-   x := ReplayPackage{}
-   // b, _ := ioutil.ReadAll(resp.Body)
-   err = json.NewDecoder(resp.Body).Decode(&x)
-   if err != nil {
-      panic(err)
-   }
-   y, _ := json.Marshal(x)
-   fmt.Printf("%v", string(y))
+   fmt.Printf("%s\n", token)
 }
