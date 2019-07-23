@@ -1,4 +1,4 @@
-package SherryOauthClient
+package main  //SherryOauthClient
 
 import(
    "os"
@@ -6,6 +6,7 @@ import(
    "time"
    "bytes"
    "net/http"
+   "net/url"
    "encoding/json"
 )
 
@@ -37,6 +38,16 @@ func (o *Oauth) Login(username, password string)(string, error) {
    var netClient = &http.Client{
       Timeout: time.Second * 10,
    }
+   if o.ProxyUrl != "" {
+      proxyURL, err := url.Parse(o.ProxyUrl)
+      if err != nil {
+         return "", err
+      }
+fmt.Println(proxyURL)
+      netClient.Transport = &http.Transport{
+         Proxy: http.ProxyURL(proxyURL),
+      }
+   }
    req, err := http.NewRequest("POST", o.OauthServer, bytes.NewReader(payloadBytes))
    if err != nil { return "", err }
    req.Header.Set("Content-Type", "application/json")
@@ -67,16 +78,18 @@ func NewOauthClient(OauthServerUrl string)(*Oauth, error) {
 
    return &Oauth{
       OauthServer: OauthServerUrl,
+      ProxyUrl: "",
    }, nil
 }
 
 
 func main() {
-   oauth, err := NewOauthClient("https://wteamapi.its.sinica.edu.tw/coursehours/dorelogin")
+   // oauth, err := NewOauthClient("http://wteamapi.its.sinica.edu.tw/coursehours/dorelogin")
+   oauth, err := NewOauthClient("http://devwteamapi.test5.sinica.edu.tw/coursehours/dorelogin")
    if err != nil {
       panic(err)
    }
-
+   oauth.SetProxy("http://140.109.12.18:3128")
    token, err := oauth.Login("eplusplatform", "12345")
    if err != nil {
       fmt.Println(err)
